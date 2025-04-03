@@ -12,7 +12,7 @@ int main(void)
     P1SEL1 &= ~BIT2 & BIT3;
     P1SEL0 |= BIT2 | BIT3;                  // I2C pins
     
-    keypadInit();
+    keypad_init();
 
     // Disable the GPIO power-on default high-impedance mode to activate
     // previously configured port settings

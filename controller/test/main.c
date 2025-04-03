@@ -83,6 +83,7 @@ void write_pattern_toggle(){
     int i = 0;
     for (i = 0; i < sizeof(letters_pattern_toggle); i++) {
         data = letters_pattern_toggle[i];  // Set data to be transmited to next letter code
+        while (UCB0CTL1 & UCTXSTP);
         UCB0CTLW0 |= UCTXSTT;              // Transmit
     }
     UCB0I2CSA = 0x00;                      // Reset slave address
@@ -148,7 +149,8 @@ void lcd_window_size_transmit(){
             break;
         case '1': 
             data = 1;       // Convert char to integer
-            UCB0CTLW0 |= UCTXSTT;                           
+            UCB0CTLW0 |= UCTXSTT;
+            while (UCB0CTL1 & UCTXSTP);                           
             break;
         case '2': 
             data = 2;       
