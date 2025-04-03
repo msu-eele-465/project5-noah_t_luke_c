@@ -1,7 +1,6 @@
 #include "intrinsics.h"
 #include <msp430.h>
 #include "keypad.h"
-#include <math.h>
 
 #define unlock_code "1738"
 
@@ -9,11 +8,6 @@ unsigned char data = 0x00;
 int lock_status = 1;
 int window = 0;
 char key_pressed;
-
-float ADC_Result;
-float temp;
-float calc;
-int real_temp;
 
 int letters_set_pattern[] = {0b01010011, 0b01100101, 0b01110100, 0b01000000, 0b01010000, 0b01100001, 0b01110100, 0b01110100, 0b01100101, 0b01110000, 0b01101110};
 int letters_set_window[] = {0b01010011, 0b01100101, 0b01110100, 0b01000000, 0b01010111, 0b01101001, 0b01101110, 0b01100100, 0b01101111, 0b01110111, 0b01000000, 0b01010011, 0b01101001, 0b01111010, 0b01100101};
@@ -199,22 +193,6 @@ int main(void)
     // Stop WDT
     WDTCTL = WDTPW | WDTHOLD;
 
-    TB0CCTL0 |= CCIE;                                             // TBCCR0 interrupt enabled
-    TB0CCR0 = 32;
-    TB0CTL = TBSSEL__ACLK | MC__UP;                               // ACLK, UP mode
-
-    // Configure ADC A1 pin
-    P1SEL0 |= BIT1;
-    P1SEL1 |= BIT1;
-
-    // Configure ADC12
-    ADCCTL0 |= ADCSHT_2 | ADCON;                             // ADCON, S&H=16 ADC clks
-    ADCCTL1 |= ADCSHP;                                       // ADCCLK = MODOSC; sampling timer
-    ADCCTL2 &= ~ADCRES;                                      // clear ADCRES in ADCCTL
-    ADCCTL2 |= ADCRES_2;                                     // 12-bit conversion results
-    ADCMCTL0 |= ADCINCH_1;                                   // A1 ADC input select; Vref=AVCC
-    ADCIE |= ADCIE0;                                         // Enable ADC conv complete interrupt
-
     // Set up I2C
     i2c_config();
 
@@ -234,40 +212,38 @@ int main(void)
     
     while (1)
     {       
-        lock_keypad(unlock_code);
-        lock_status = 0;
-        UCB0I2CSA = 0x0B;        
-        while (UCB0CTL1 & UCTXSTP);
+        if(lock_status == 1)
+        {
+            lock_keypad(unlock_code);
+            lock_status = 0;
+        }
         while(key_pressed != 'A' && key_pressed != 'B') 
-        {      
-            real_temp = 100*temp;
-            int thousands = (real_temp/1000) + 48;
-            real_temp %= 1000;
-            int hundreds = (real_temp/100) + 48;
-            real_temp %= 100;
-            int tens = (real_temp/10) + 48;
-            int ones = (real_temp%10) + 48;
-            data = 0xAD;
-            UCB0CTLW0 |= UCTXSTT;
-            while (UCB0CTL1 & UCTXSTP);
-            __delay_cycles(2000);
-            data = thousands;
-            UCB0CTLW0 |= UCTXSTT;
-            while (UCB0CTL1 & UCTXSTP);
-            __delay_cycles(2000);
-            data = hundreds;
-            UCB0CTLW0 |= UCTXSTT;
-            while (UCB0CTL1 & UCTXSTP);
-            __delay_cycles(2000);
-            data = 0b00101110;
-            UCB0CTLW0 |= UCTXSTT;
-            while (UCB0CTL1 & UCTXSTP);
-            __delay_cycles(2000);
-            data = tens;
-            UCB0CTLW0 |= UCTXSTT;
-            while (UCB0CTL1 & UCTXSTP);
-            __delay_cycles(200000);  
- 
+        {             
+            // Just sit here until A or B is pressed
+        }
+        P2OUT ^= BIT7;
+        if(key_pressed == 'A'){                    // A pressed
+            
+            write_set_pattern();
+
+            while(key_pressed != '0' && key_pressed != '1' && key_pressed != '2' && key_pressed != '3')
+            {
+                // Wait here until valid key is pressed
+            }
+            P2OUT ^= BIT7;
+            transmit_pattern_led();
+        }
+        if(key_pressed == 'B'){
+
+            write_set_window();
+            
+            while(key_pressed != '0' && key_pressed != '1' && key_pressed != '2' && key_pressed != '3' && key_pressed != '4' && key_pressed != '5' && key_pressed != '6' && key_pressed != '7' && key_pressed != '8' && key_pressed != '9')
+            {
+                // Wait here until valid key is pressed     
+            }
+
+            lcd_window_size_transmit();
+            
         }
     }
 }
@@ -276,60 +252,11 @@ int main(void)
 #pragma vector=EUSCI_B0_VECTOR
 __interrupt void EUSCI_B0_I2C_ISR(void){
     UCB0TXBUF = data;
+    P2OUT ^= BIT7;
 }
 
 #pragma vector = PORT3_VECTOR
 __interrupt void ISR_PORT3_S2(void) {
     key_pressed = scanPad();
     P3IFG &= ~(BIT0 | BIT1 | BIT2 | BIT3);  // Clear the interrupt flag
-}
-
-// ADC interrupt service routine
-#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector=ADC_VECTOR
-__interrupt void ADC_ISR(void)
-#elif defined(__GNUC__)
-void __attribute__ ((interrupt(ADC_VECTOR))) ADC_ISR (void)
-#else
-#error Compiler not supported!
-#endif
-{
-    calc = 0;
-    ADC_Result = 0;
-    switch(__even_in_range(ADCIV,ADCIV_ADCIFG))
-    {
-        case ADCIV_NONE:
-            break;
-        case ADCIV_ADCOVIFG:
-            break;
-        case ADCIV_ADCTOVIFG:
-            break;
-        case ADCIV_ADCHIIFG:
-            break;
-        case ADCIV_ADCLOIFG:
-            break;
-        case ADCIV_ADCINIFG:
-            break;
-        case ADCIV_ADCIFG:
-            ADC_Result = ADCMEM0;
-            calc = (ADC_Result*3.3)/4096;
-            temp = (calc-1.8663)/(-0.01169);
-            __bic_SR_register_on_exit(LPM0_bits);            // Clear CPUOFF bit from LPM0
-            break;
-        default:
-            break;
-    }
-}
-
-// Timer B0 interrupt service routine
-#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
-#pragma vector = TIMER0_B0_VECTOR
-__interrupt void Timer_B (void)
-#elif defined(__GNUC__)
-void __attribute__ ((interrupt(TIMER0_B0_VECTOR))) Timer_B (void)
-#else
-#error Compiler not supported!
-#endif
-{
-    ADCCTL0 |= ADCENC | ADCSC;                                    // Sampling and conversion start
 }
