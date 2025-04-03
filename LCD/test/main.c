@@ -7,9 +7,11 @@
 unsigned char RXData = 0;
 unsigned char final = 0;
 
+char temp_set = 0;
+
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
-const char letters_set_pattern[] = {0b01010011, 0b01100101, 0b01110100, 0b01000000, 0b01010000, 0b01100001, 0b01110100, 0b01110100, 0b01100101, 0b01110000, 0b01101110};
+const char temperature_set[] = {0b01010100, 0b01100101, 0b01101101, 0b01110000, 0b01100101, 0b01110010, 0b01110100, 0b01110100, 0b01100101, 0b01110000, 0b01101110};
 const char letters_set_window[] = {0b01010011, 0b01100101, 0b01110100, 0b01000000, 0b01010111, 0b01101001, 0b01101110, 0b01100100, 0b01101111, 0b01110111, 0b01000000, 0b01010011, 0b01101001, 0b01111010, 0b01100101};
 const char letters_pattern_static[] = {0b01010011, 0b01110100, 0b01100001, 0b01110100, 0b01101001, 0b01100011};
 const char letters_pattern_toggle[] = {0b01010100, 0b01111010, 0b01100111, 0b01100111, 0b01101100, 0b01100101};
@@ -221,7 +223,7 @@ int main(void) {
     // Configure USCI_B0 for I2C mode
     UCB0CTLW0 |= UCSWRST;                                 //Software reset enabled
     UCB0CTLW0 |= UCMODE_3;                                //I2C slave mode, SMCLK
-    UCB0I2COA0 = 0x0A | UCOAEN;                           //SLAVE0 own address is 0x0A| enable
+    UCB0I2COA0 = 0x0B | UCOAEN;                           //SLAVE0 own address is 0x0A| enable
     UCB0CTLW0 &=~UCSWRST;                                 //clear reset register
 
     UCB0IE |=  UCRXIE0 | UCRXIE1| UCRXIE2 | UCRXIE3;      //receive interrupt enable
@@ -237,6 +239,13 @@ int main(void) {
     lcd_setup();
     __delay_cycles(500);
     clear_cgram();
+            int i = 0;
+        for(i = 0; i<5;i++)
+        {
+            cursor_right();
+        }
+        lcd_write(0b11011111);
+        lcd_write(0b01000011);
     while(1)
     {
         final = RXData;
@@ -282,6 +291,16 @@ void __attribute__ ((interrupt(USCI_B0_VECTOR))) USCIB0_ISR (void)
 {
                                        // SLAVE0
         RXData = UCB0RXBUF;                              // Get RX data
+        if(RXData == 0xAD)
+        {
+            return_home();
+            temp_set = 4;
+        }
+        else if(temp_set != 0)
+        {
+            lcd_write(RXData);
+            temp_set--;
+        }
         P2OUT ^= BIT6;
         __bic_SR_register_on_exit(LPM0_bits);                       // Vector 24: RXIFG0 break;
     
