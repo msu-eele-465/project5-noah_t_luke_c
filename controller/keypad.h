@@ -8,7 +8,7 @@ const char colPins[4] = {BIT0, BIT1, BIT2, BIT3};
 
 
 
-void keypadInit(void){
+void keypad_init(void){
     WDTCTL = WDTPW | WDTHOLD;  // Stop watchdog timer
 
     // Status LED setup
